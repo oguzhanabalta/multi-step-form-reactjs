@@ -1,77 +1,152 @@
-import {Button, Card, CardContent, Typography} from '@material-ui/core';
-import {Field, Form, Formik, FormikConfig, FormikValues} from 'formik';
-import { CheckboxWithLabel, TextField} from 'formik-material-ui';
-import { useState } from 'react';
-import { object,mixed, number } from 'yup';
-import React from 'react';
+import { Box, Button, Card, CardContent, CircularProgress, Grid, Step, StepLabel, Stepper } from '@material-ui/core';
+import { Field, Form, Formik, FormikConfig, FormikValues } from 'formik';
+import { CheckboxWithLabel, TextField } from 'formik-material-ui';
+import React, { useState } from 'react';
+import { mixed, number, object } from 'yup';
 
+const sleep = (time) => new Promise((acc) => setTimeout(acc, time));
 
 export default function Home() {
-  return(
+  return (
     <Card>
       <CardContent>
-        <FormikStepper 
-        validationSchema={object({
-          money: mixed().when('millionere', {
-            is: true,
-            then: number().required().min(1_000_000, 'Beacuse you said you are millionaire you need to have 1 million'),
-            otherwise: number().required()
-
-          }) 
-        })}
-        initialValues={{
-          firstName: '',
-          lastName: '',
-          millionere: false,
-          money: 0,
-          description: ''
-        }} onSubmit={()=>{}}>
-        
-
-            <div>
-                <Field name="firstName" component={TextField} label="First Name"/>
-                <Field name="lastName" component={TextField} label="Last Name"/>
-                <Field name="millionere" type="checkbox" component={CheckboxWithLabel} Label={{label: "I am a millionare"}}/>
-            </div>
-            <div>
-                <Field name="money" type="number" component={TextField} label="Money"/>
-            </div>
-            <div>
-               <Field name="description" component={TextField} label="Description"/>
-            </div>
-            
-         
+        <FormikStepper
+          initialValues={{
+            firstName: '',
+            lastName: '',
+            millionaire: false,
+            money: 0,
+            description: '',
+          }}
+          onSubmit={async (values) => {
+            await sleep(3000);
+            console.log('values', values);
+          }}
+        >
+          <FormikStep label="Personal Data">
+            <Box paddingBottom={2}>
+              <Field fullWidth name="firstName" component={TextField} label="First Name" />
+            </Box>
+            <Box paddingBottom={2}>
+              <Field fullWidth name="lastName" component={TextField} label="Last Name" />
+            </Box>
+            <Box paddingBottom={2}>
+              <Field
+                name="millionaire"
+                type="checkbox"
+                component={CheckboxWithLabel}
+                Label={{ label: 'I am a millionaire' }}
+              />
+            </Box>
+          </FormikStep>
+          <FormikStep
+            label="Bank Accounts"
+            validationSchema={object({
+              money: mixed().when('millionaire', {
+                is: true,
+                then: number()
+                  .required()
+                  .min(
+                    1_000_000,
+                    'Because you said you are a millionaire you need to have 1 million'
+                  ),
+                otherwise: number().required(),
+              }),
+            })}
+          >
+            <Box paddingBottom={2}>
+              <Field
+                fullWidth
+                name="money"
+                type="number"
+                component={TextField}
+                label="All the money I have"
+              />
+            </Box>
+          </FormikStep>
+          <FormikStep label="More Info">
+            <Box paddingBottom={2}>
+              <Field fullWidth name="description" component={TextField} label="Description" />
+            </Box>
+          </FormikStep>
         </FormikStepper>
       </CardContent>
     </Card>
-
-  )
+  );
 }
 
-export function FormikStepper({children,...props}: FormikConfig<FormikValues>){
-    const childrenArray= React.Children.toArray(children);
-    const [step, setStep] = useState(0);
-    const currentChild= childrenArray[step];
+export interface FormikStepProps
+  extends Pick<FormikConfig<FormikValues>, 'children' | 'validationSchema'> {
+  label: string;
+}
 
-    function isLastStep(){
-      return step === childrenArray.length -1;
-    }
+export function FormikStep({ children }: FormikStepProps) {
+  return <>{children}</>;
+}
 
-    return(
-      <Formik {...props} onSubmit={async(values, helpers)=>{
-          if(isLastStep()){
-            await props.onSubmit(values, helpers);
-          }else{
-            setStep(s=> s+1);
-          }
-      }}>
-        <Form autoComplete="off"> 
-        {currentChild}
+export function FormikStepper({ children, ...props }: FormikConfig<FormikValues>) {
+  const childrenArray = React.Children.toArray(children) as React.ReactElement<FormikStepProps>[];
+  const [step, setStep] = useState(0);
+  const currentChild = childrenArray[step];
+  const [completed, setCompleted] = useState(false);
 
-        { step > 0 ? <Button onClick={()=> setStep(s=> s-1)}>Back</Button> : null }
-        <Button type="submit">{isLastStep() ? 'Submit' : 'Next'}</Button>
+  function isLastStep() {
+    return step === childrenArray.length - 1;
+  }
+
+  return (
+    <Formik
+      {...props}
+      validationSchema={currentChild.props.validationSchema}
+      onSubmit={async (values, helpers) => {
+        if (isLastStep()) {
+          await props.onSubmit(values, helpers);
+          setCompleted(true);
+        } else {
+          setStep((s) => s + 1);
+          helpers.setTouched({});
+        }
+      }}
+    >
+      {({ isSubmitting }) => (
+        <Form autoComplete="off">
+          <Stepper alternativeLabel activeStep={step}>
+            {childrenArray.map((child, index) => (
+              <Step key={child.props.label} completed={step > index || completed}>
+                <StepLabel>{child.props.label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+
+          {currentChild}
+
+          <Grid container spacing={2}>
+            {step > 0 ? (
+              <Grid item>
+                <Button
+                  disabled={isSubmitting}
+                  variant="contained"
+                  color="primary"
+                  onClick={() => setStep((s) => s - 1)}
+                >
+                  Back
+                </Button>
+              </Grid>
+            ) : null}
+            <Grid item>
+              <Button
+                startIcon={isSubmitting ? <CircularProgress size="1rem" /> : null}
+                disabled={isSubmitting}
+                variant="contained"
+                color="primary"
+                type="submit"
+              >
+                {isSubmitting ? 'Submitting' : isLastStep() ? 'Submit' : 'Next'}
+              </Button>
+            </Grid>
+          </Grid>
         </Form>
-      </Formik>
-    )
-
+      )}
+    </Formik>
+  );
 }
